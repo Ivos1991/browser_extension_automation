@@ -19,6 +19,8 @@ jobs:
   pr-checks:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      has_allure_results: ${{ steps.detect_allure_results.outputs.has_results }}
     env:
       HEADLESS: "true"
       BROWSER_EVIDENCE_MODE: ${{ inputs.evidence_mode || vars.BROWSER_EVIDENCE_MODE || 'failure_only' }}
@@ -70,12 +72,23 @@ jobs:
       - name: Run pytest
         run: python -m pytest tests/ui -m ui -q -rs --alluredir artifacts/allure-results
 
-      - name: Install Allure CLI
+      - name: Detect Allure results
         if: always()
+        id: detect_allure_results
+        shell: bash
+        run: |
+          if [ -d artifacts/allure-results ] && [ "$(find artifacts/allure-results -type f | head -n 1)" ]; then
+            echo "has_results=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_results=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Allure CLI
+        if: always() && steps.detect_allure_results.outputs.has_results == 'true'
         run: npm install -g allure-commandline
 
       - name: Generate Allure HTML report
-        if: always()
+        if: always() && steps.detect_allure_results.outputs.has_results == 'true'
         run: allure generate artifacts/allure-results --clean -o artifacts/allure-report
 
       - name: Upload allure results
@@ -87,7 +100,7 @@ jobs:
           path: artifacts/allure-results/
 
       - name: Upload allure HTML report
-        if: always()
+        if: always() && steps.detect_allure_results.outputs.has_results == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: allure-html-report
@@ -101,3 +114,32 @@ jobs:
           name: test-artifacts
           if-no-files-found: warn
           path: artifacts/
+
+  publish-summary-no-report:
+    if: always() && needs.pr-checks.outputs.has_allure_results != 'true'
+    needs: pr-checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish CI summary
+        run: |
+          {
+            echo "## CI Report Summary"
+            echo
+            echo "- Evidence mode: \`${{ github.event.inputs.evidence_mode || vars.BROWSER_EVIDENCE_MODE || 'failure_only' }}\`"
+            echo "- No Allure HTML report was generated in this workflow run."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish-summary-artifact-link:
+    if: always() && needs.pr-checks.outputs.has_allure_results == 'true'
+    needs: pr-checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish CI summary
+        run: |
+          {
+            echo "## CI Report Summary"
+            echo
+            echo "- Evidence mode: \`${{ github.event.inputs.evidence_mode || vars.BROWSER_EVIDENCE_MODE || 'failure_only' }}\`"
+            echo "- Click [here](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts) to open the workflow artifacts page."
+            echo "- Download the \`allure-html-report\` artifact for the rendered report and \`allure-results\` for the raw results."
+          } >> "$GITHUB_STEP_SUMMARY"
