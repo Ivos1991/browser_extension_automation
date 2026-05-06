@@ -1,0 +1,98 @@
+name: PR Checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      evidence_mode:
+        description: "Playwright evidence collection mode"
+        required: true
+        default: "failure_only"
+        type: choice
+        options:
+          - failure_only
+          - full
+          - screenshot_only
+
+jobs:
+  pr-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HEADLESS: "true"
+      BROWSER_EVIDENCE_MODE: ${{ inputs.evidence_mode || vars.BROWSER_EVIDENCE_MODE || 'failure_only' }}
+      ARTIFACT_DIR: artifacts
+      EXTENSION_PATH: extensions/prompt-security
+      EXTENSION_API_KEY: ${{ secrets.EXTENSION_API_KEY || '13793400-107d-406b-b9ed-5cd7bb22be98' }}
+      EXTENSION_API_DOMAIN: ${{ vars.EXTENSION_API_DOMAIN || 'eu.prompt.security' }}
+      ALLOWED_URL: https://chatgpt.com
+      BLOCKED_URL: https://gemini.google.com
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Install Playwright browser
+        run: python -m playwright install --with-deps chromium
+
+      - name: Materialize unpacked extension from secret
+        if: ${{ secrets.PROMPT_SECURITY_EXTENSION_ZIP_BASE64 != '' }}
+        shell: bash
+        run: |
+          mkdir -p "${EXTENSION_PATH}"
+          echo "${{ secrets.PROMPT_SECURITY_EXTENSION_ZIP_BASE64 }}" | base64 --decode > extension.zip
+          unzip -q extension.zip -d "${EXTENSION_PATH}"
+
+      - name: Validate extension directory
+        shell: bash
+        run: |
+          if [ ! -f "${EXTENSION_PATH}/manifest.json" ]; then
+            echo "Missing unpacked extension at ${EXTENSION_PATH}. Commit it to the repo or provide PROMPT_SECURITY_EXTENSION_ZIP_BASE64." >&2
+            exit 1
+          fi
+
+      - name: Run pytest
+        run: python -m pytest tests/ui -m ui -q -rs --alluredir artifacts/allure-results
+
+      - name: Install Allure CLI
+        if: always()
+        run: npm install -g allure-commandline
+
+      - name: Generate Allure HTML report
+        if: always()
+        run: allure generate artifacts/allure-results --clean -o artifacts/allure-report
+
+      - name: Upload allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results
+          if-no-files-found: warn
+          path: artifacts/allure-results/
+
+      - name: Upload allure HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-html-report
+          if-no-files-found: warn
+          path: artifacts/allure-report/
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts
+          if-no-files-found: warn
+          path: artifacts/
