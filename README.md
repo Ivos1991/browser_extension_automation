@@ -12,15 +12,7 @@ Production-style Pytest + Playwright framework for validating a browser extensio
 - `pages/`: thin page objects and extension bootstrap page
 - `tests/ui/`: UI scenarios and UI-specific fixtures
 - `.github/workflows/`: CI checks for push and pull requests
-
-The design follows the same reference-project style:
-
-- small root `conftest.py`
-- folder-specific `tests/ui/conftest.py`
-- shared settings and logger
-- `BasePage` inheriting a central Playwright action layer
-- Allure-first evidence handling
-
+- 
 ## Coverage
 
 Implemented UI scenarios:
