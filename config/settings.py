@@ -42,6 +42,8 @@ class Settings:
     extension_path: Path | None
     extension_api_key: str
     extension_api_domain: str
+    policy_sync_timeout_ms: int
+    policy_sync_poll_interval_ms: int
 
     @property
     def allure_results_dir(self) -> Path:
@@ -95,6 +97,8 @@ class Settings:
                 "13793400-107d-406b-b9ed-5cd7bb22be98",
             ).strip(),
             extension_api_domain=os.getenv("EXTENSION_API_DOMAIN", "eu.prompt.security").strip(),
+            policy_sync_timeout_ms=int(os.getenv("POLICY_SYNC_TIMEOUT_MS", "90000")),
+            policy_sync_poll_interval_ms=int(os.getenv("POLICY_SYNC_POLL_INTERVAL_MS", "2000")),
         )
 
 

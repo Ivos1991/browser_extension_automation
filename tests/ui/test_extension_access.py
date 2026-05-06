@@ -41,8 +41,7 @@ def test_accessing_blocked_gemini_url_expects_access_denied_page(genai_page: Gen
 @pytest.mark.blocked
 @allure.title("Accessing configured blocked URL expects access denied page")
 def test_accessing_configured_blocked_url_expects_access_denied_page(
-    genai_page: GenAIPage, blocked_page: BlockedPage, settings: Settings
-) -> None:
+    genai_page: GenAIPage, blocked_page: BlockedPage, settings: Settings) -> None:
     with allure.step("Navigate to the configured blocked URL"):
         genai_page.open_blocked_genai_application()
 
@@ -56,8 +55,7 @@ def test_accessing_configured_blocked_url_expects_access_denied_page(
 @pytest.mark.visual
 @allure.title("Accessing blocked Gemini URL expects blocked page visual layout")
 def test_accessing_blocked_gemini_url_expects_blocked_page_visual_layout(
-    genai_page: GenAIPage, blocked_page: BlockedPage, blocked_modal_snapshot_path, settings: Settings
-) -> None:
+    genai_page: GenAIPage, blocked_page: BlockedPage, blocked_modal_snapshot_path, settings: Settings) -> None:
     with allure.step("Navigate to the blocked Gemini application"):
         genai_page.open_blocked_genai_application()
 
@@ -106,13 +104,11 @@ def test_opening_blocked_gemini_url_in_new_tab_expects_access_denied_page(second
 @pytest.mark.ui
 @allure.title("Accessing blocked Gemini URL with invalid extension API key expects no policy enforcement")
 def test_accessing_blocked_gemini_url_with_invalid_extension_api_key_expects_no_policy_enforcement(
-    genai_page: GenAIPage, invalid_extension_api_key_configuration: str
-) -> None:
+    genai_page: GenAIPage, invalid_extension_api_key_configuration: str) -> None:
     with allure.step("Navigate to the blocked Gemini application with an invalid API key configured"):
         genai_page.open_blocked_genai_application()
 
     with allure.step("Validate policy enforcement is not active with the invalid API key"):
         genai_page.assert_access_remains_available_for("gemini.google.com")
         assert_that(invalid_extension_api_key_configuration).described_as(
-            "invalid extension API key used for negative test"
-        ).is_equal_to(INVALID_EXTENSION_API_KEY)
+            "invalid extension API key used for negative test").is_equal_to(INVALID_EXTENSION_API_KEY)

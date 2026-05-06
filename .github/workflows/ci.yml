@@ -23,12 +23,16 @@ jobs:
       HEADLESS: "true"
       BROWSER_EVIDENCE_MODE: ${{ inputs.evidence_mode || vars.BROWSER_EVIDENCE_MODE || 'failure_only' }}
       ARTIFACT_DIR: artifacts
+      TARGET_ENV: ci
       EXTENSION_PATH: extensions/prompt-security
       EXTENSION_API_KEY: ${{ secrets.EXTENSION_API_KEY || '13793400-107d-406b-b9ed-5cd7bb22be98' }}
       EXTENSION_API_DOMAIN: ${{ vars.EXTENSION_API_DOMAIN || 'eu.prompt.security' }}
       PROMPT_SECURITY_EXTENSION_ZIP_BASE64: ${{ secrets.PROMPT_SECURITY_EXTENSION_ZIP_BASE64 }}
       ALLOWED_URL: https://chatgpt.com
       BLOCKED_URL: https://gemini.google.com
+      POLICY_SYNC_TIMEOUT_MS: "90000"
+      POLICY_SYNC_POLL_INTERVAL_MS: "2000"
+      VISUAL_MAX_DIFF_PIXELS: "15000"
 
     steps:
       - name: Checkout

@@ -1,4 +1,5 @@
 from pathlib import Path
+from time import monotonic
 from typing import Callable
 
 import allure
@@ -22,6 +23,8 @@ def configured_extension(browser_context: BrowserContext, extension_id: str, set
             popup_page.configure_api_access()
     finally:
         page.close()
+
+    _wait_for_policy_enforcement(browser_context, settings)
 
 
 @pytest.fixture
@@ -72,3 +75,26 @@ def secondary_page(browser_context: BrowserContext, settings: Settings) -> Page:
 @pytest.fixture(scope="session")
 def blocked_modal_snapshot_path() -> Path:
     return Path("tests/ui/snapshots/gemini-blocked-modal.png")
+
+
+def _wait_for_policy_enforcement(browser_context: BrowserContext, settings: Settings) -> None:
+    probe_page = browser_context.new_page()
+    probe_page.set_default_timeout(settings.expect_timeout_ms)
+    probe_page.set_default_navigation_timeout(settings.page_load_timeout_ms)
+    deadline = monotonic() + (settings.policy_sync_timeout_ms / 1000)
+    last_url = ""
+
+    try:
+        with allure.step("Wait for extension policy enforcement to become active"):
+            while monotonic() < deadline:
+                probe_page.goto(settings.blocked_url, wait_until="domcontentloaded")
+                probe_page.wait_for_timeout(settings.policy_sync_poll_interval_ms)
+                last_url = probe_page.url
+                if last_url.startswith("chrome-extension://") and "pageOverlay.html" in last_url:
+                    return
+            pytest.fail(
+                "Extension policy enforcement did not become active within "
+                f"{settings.policy_sync_timeout_ms}ms. Last observed URL: {last_url or settings.blocked_url}"
+            )
+    finally:
+        probe_page.close()
