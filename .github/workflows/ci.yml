@@ -26,6 +26,7 @@ jobs:
       EXTENSION_PATH: extensions/prompt-security
       EXTENSION_API_KEY: ${{ secrets.EXTENSION_API_KEY || '13793400-107d-406b-b9ed-5cd7bb22be98' }}
       EXTENSION_API_DOMAIN: ${{ vars.EXTENSION_API_DOMAIN || 'eu.prompt.security' }}
+      PROMPT_SECURITY_EXTENSION_ZIP_BASE64: ${{ secrets.PROMPT_SECURITY_EXTENSION_ZIP_BASE64 }}
       ALLOWED_URL: https://chatgpt.com
       BLOCKED_URL: https://gemini.google.com
 
@@ -47,11 +48,11 @@ jobs:
         run: python -m playwright install --with-deps chromium
 
       - name: Materialize unpacked extension from secret
-        if: ${{ secrets.PROMPT_SECURITY_EXTENSION_ZIP_BASE64 != '' }}
+        if: ${{ env.PROMPT_SECURITY_EXTENSION_ZIP_BASE64 != '' }}
         shell: bash
         run: |
           mkdir -p "${EXTENSION_PATH}"
-          echo "${{ secrets.PROMPT_SECURITY_EXTENSION_ZIP_BASE64 }}" | base64 --decode > extension.zip
+          echo "${PROMPT_SECURITY_EXTENSION_ZIP_BASE64}" | base64 --decode > extension.zip
           unzip -q extension.zip -d "${EXTENSION_PATH}"
 
       - name: Validate extension directory
