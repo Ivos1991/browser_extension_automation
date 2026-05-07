@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import allure
 
 from assertpy import assert_that
@@ -25,10 +23,6 @@ class ExtensionPopupPage(BasePage):
     @property
     def status_message(self):
         return self.page.locator("#message")
-
-    @property
-    def download_logs_button(self):
-        return self.page.locator("#downloadLogsButton")
 
     def open(self, extension_id: str) -> None:
         super().open(f"chrome-extension://{extension_id}/{EXTENSION_POPUP_PATH}")
@@ -93,22 +87,3 @@ class ExtensionPopupPage(BasePage):
         except PlaywrightTimeoutError:
             self.page.reload(wait_until="domcontentloaded")
             self.api_domain_input.wait_for(state="attached", timeout=self.settings.expect_timeout_ms)
-
-    def download_logs(self, download_dir: Path, artifact_name: str) -> Path:
-        with allure.step("Download extension logs"):
-            download_dir.mkdir(parents=True, exist_ok=True)
-            self._wait_for_configuration_form()
-            with self.page.expect_download(timeout=self.settings.expect_timeout_ms) as download_info:
-                self.page.evaluate(
-                    """() => {
-                        const browserApi = typeof browser === "undefined" ? chrome : browser;
-                        const flowTraceId = typeof crypto !== "undefined" && crypto.randomUUID
-                            ? crypto.randomUUID()
-                            : `${Date.now()}`;
-                        browserApi.runtime.sendMessage({ type: "saveLogs", ctx: { flowTraceId } });
-                    }"""
-                )
-            download = download_info.value
-            target_path = download_dir / f"{artifact_name}-{download.suggested_filename}"
-            download.save_as(str(target_path))
-            return target_path

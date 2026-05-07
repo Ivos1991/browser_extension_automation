@@ -70,7 +70,8 @@ Allure attachment behavior:
 - In `full` mode, passing tests also attach screenshot, trace, video, and extension log evidence.
 - These artifacts are attached directly to the test result so they are visible on passing and failing tests without drilling into fixture teardown containers.
 - Extension log capture is controlled by `EXTENSION_LOGS_ENABLED=true|false`.
-- When `EXTENSION_LOGS_ENABLED=true`, logs are downloaded from the extension popup and attached whenever the current evidence mode says to attach evidence.
+- When `EXTENSION_LOGS_ENABLED=true`, the framework triggers the extension's `saveLogs` runtime flow, reads the resulting `debugLogs` buffer from extension storage, writes a local `.txt` artifact, and attaches it as `extension-logs`.
+- This avoids depending on browser download events from the extension popup, which are unreliable in remote CI runners.
 - The per-test `collect_all_evidence` marker still overrides the global mode and forces the full configured evidence set for that test.
 
 ## Setup
