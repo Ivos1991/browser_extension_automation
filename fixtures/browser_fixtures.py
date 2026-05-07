@@ -13,7 +13,7 @@ from core.testing_utils.evidence import (
     should_capture_trace,
     should_record_video,
 )
-from core.testing_utils.playwright_artifacts import attach_files, attach_page_screenshot
+from core.testing_utils.playwright_artifacts import capture_page_screenshot
 
 
 @pytest.fixture(scope="session")
@@ -76,23 +76,27 @@ def page(request: pytest.FixtureRequest, browser_context: BrowserContext, settin
         test_failed,
     )
 
+    page_url: str | None = None
+    evidence_paths: list[Path] = []
+
     if should_attach:
         screenshot_path = settings.screenshots_dir / f"{request.node.name}.png"
-        attach_page_screenshot(
-            page,
-            screenshot_path,
-            name="failure-screenshot" if test_failed else "page-screenshot",
-        )
+        capture_page_screenshot(page, screenshot_path)
+        page_url = page.url
+        if screenshot_path.exists():
+            evidence_paths.append(screenshot_path)
 
     video = page.video
     page.close()
     video_path = _resolve_video_path(video)
 
     if should_attach:
-        files_to_attach = [
+        evidence_paths.extend(
             path for path in [trace_path, video_path] if isinstance(path, Path) and path.exists()
-        ]
-        attach_files(files_to_attach)
+        )
+
+    setattr(request.node, "_allure_evidence_paths", evidence_paths)
+    setattr(request.node, "_allure_evidence_page_url", page_url)
 
 
 @pytest.fixture(scope="session")

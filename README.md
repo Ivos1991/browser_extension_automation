@@ -12,7 +12,7 @@ Production-style Pytest + Playwright framework for validating a browser extensio
 - `pages/`: thin page objects and extension bootstrap page
 - `tests/ui/`: UI scenarios and UI-specific fixtures
 - `.github/workflows/`: CI checks for push and pull requests
-- 
+
 ## Coverage
 
 Implemented UI scenarios:
@@ -57,7 +57,7 @@ Legacy values `always`, `on_failure`, and `off` are normalized for compatibility
 Allure attachment behavior:
 
 - In `full` mode, passing tests also attach screenshot, trace, and video evidence.
-- Because these artifacts are produced during fixture teardown, they appear in the Allure report under the `page` fixture `afters` section rather than only as top-level test attachments.
+- These artifacts are attached directly to the test result so they are visible on passing and failing tests without drilling into fixture teardown containers.
 
 ## Setup
 
@@ -103,7 +103,7 @@ python -m pytest tests\ui -k visual -q -rs --alluredir artifacts\allure-results
 
 ```powershell
 python -m pytest tests\ui -m ui -q -rs --alluredir artifacts\allure-results
-allure generate artifacts\allure-results --clean -o artifacts\allure-report
+allure generate artifacts\allure-results --clean --single-file -o artifacts\allure-report
 allure open artifacts\allure-report
 ```
 
@@ -115,7 +115,7 @@ The workflow runs on `push`, `pull_request`, and manual dispatch. It:
 - installs Chromium for Playwright
 - validates the unpacked extension
 - runs the UI pytest suite
-- generates an Allure HTML report
+- generates a single-file Allure HTML report suitable for GitHub Pages publishing
 - uploads raw Allure results, the HTML report, and test artifacts
 
 Manual dispatch supports choosing the evidence mode. If a checked-in unpacked extension is not available, CI can materialize one from `PROMPT_SECURITY_EXTENSION_ZIP_BASE64`.

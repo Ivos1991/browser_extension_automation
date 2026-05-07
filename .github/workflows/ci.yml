@@ -92,7 +92,7 @@ jobs:
 
       - name: Generate Allure HTML report
         if: always() && steps.detect_allure_results.outputs.has_results == 'true'
-        run: allure generate artifacts/allure-results --clean -o artifacts/allure-report
+        run: allure generate artifacts/allure-results --clean --single-file -o artifacts/allure-report
 
       - name: Upload allure results
         if: always()
