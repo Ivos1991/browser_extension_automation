@@ -27,6 +27,13 @@ Implemented UI scenarios:
 
 The visual test compares the blocked modal screenshot to a committed baseline in `tests/ui/snapshots/gemini-blocked-modal.png`.
 
+Marker groups:
+
+- `ui`: full browser-extension UI suite
+- `positive`: allowed-access and enforcement-resilience scenarios
+- `negative`: misconfiguration and failure-mode scenarios
+- `visual`: visual regression validation
+
 ## Extension Strategy
 
 Playwright extension automation requires an unpacked extension loaded through a persistent Chromium context.
@@ -84,6 +91,30 @@ Run the UI suite:
 python -m pytest tests\ui -m ui -q -rs --alluredir artifacts\allure-results
 ```
 
+Run only positive scenarios:
+
+```powershell
+python -m pytest tests\ui -m "ui and positive" -q -rs --alluredir artifacts\allure-results
+```
+
+Run only negative scenarios:
+
+```powershell
+python -m pytest tests\ui -m "ui and negative" -q -rs --alluredir artifacts\allure-results
+```
+
+Run only visual scenarios:
+
+```powershell
+python -m pytest tests\ui -m "ui and visual" -q -rs --alluredir artifacts\allure-results
+```
+
+Run a custom marker expression:
+
+```powershell
+python -m pytest tests\ui -m "ui and positive and not visual" -q -rs --alluredir artifacts\allure-results
+```
+
 Run headed with slow motion:
 
 ```powershell
@@ -118,7 +149,22 @@ The workflow runs on `push`, `pull_request`, and manual dispatch. It:
 - generates a single-file Allure HTML report suitable for GitHub Pages publishing
 - uploads raw Allure results, the HTML report, and test artifacts
 
-Manual dispatch supports choosing the evidence mode. If a checked-in unpacked extension is not available, CI can materialize one from `PROMPT_SECURITY_EXTENSION_ZIP_BASE64`.
+Manual dispatch supports:
+
+- `marker_selection=all_markers`: run the full `ui` suite
+- `marker_selection=positive`: run `ui and positive`
+- `marker_selection=negative`: run `ui and negative`
+- `marker_selection=visual`: run `ui and visual`
+- `marker_selection=custom`: run the expression provided in `custom_marker`
+- `evidence_mode`: choose `failure_only`, `full`, or `screenshot_only`
+
+Examples for remote/manual runs:
+
+- Run all UI tests: choose `all_markers`
+- Run only negative tests: choose `negative`
+- Run a custom subset such as `ui and positive and not visual`: choose `custom` and enter that expression in `custom_marker`
+
+If a checked-in unpacked extension is not available, CI can materialize one from `PROMPT_SECURITY_EXTENSION_ZIP_BASE64`.
 
 ## Assumptions And Tradeoffs
 

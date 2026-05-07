@@ -5,6 +5,22 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      marker_selection:
+        description: "Marker group to run"
+        required: true
+        default: "all_markers"
+        type: choice
+        options:
+          - all_markers
+          - positive
+          - negative
+          - visual
+          - custom
+      custom_marker:
+        description: "Custom pytest marker expression (used only when marker_selection=custom)"
+        required: false
+        default: ""
+        type: string
       evidence_mode:
         description: "Playwright evidence collection mode"
         required: true
@@ -27,6 +43,8 @@ jobs:
     env:
       HEADLESS: "true"
       BROWSER_EVIDENCE_MODE: ${{ inputs.evidence_mode || vars.BROWSER_EVIDENCE_MODE || 'failure_only' }}
+      MARKER_SELECTION: ${{ inputs.marker_selection || 'all_markers' }}
+      CUSTOM_MARKER: ${{ inputs.custom_marker || '' }}
       ARTIFACT_DIR: artifacts
       TARGET_ENV: ci
       EXTENSION_PATH: extensions/prompt-security
@@ -73,7 +91,32 @@ jobs:
           fi
 
       - name: Run pytest
-        run: python -m pytest tests/ui -m ui -q -rs --alluredir artifacts/allure-results
+        shell: bash
+        run: |
+          marker_expression="ui"
+          case "${MARKER_SELECTION}" in
+            positive)
+              marker_expression="ui and positive"
+              ;;
+            negative)
+              marker_expression="ui and negative"
+              ;;
+            visual)
+              marker_expression="ui and visual"
+              ;;
+            custom)
+              if [ -z "${CUSTOM_MARKER}" ]; then
+                echo "custom_marker is required when marker_selection=custom" >&2
+                exit 1
+              fi
+              marker_expression="${CUSTOM_MARKER}"
+              ;;
+            *)
+              marker_expression="ui"
+              ;;
+          esac
+          echo "Running pytest marker expression: ${marker_expression}"
+          python -m pytest tests/ui -m "${marker_expression}" -q -rs --alluredir artifacts/allure-results
 
       - name: Detect Allure results
         if: always()
@@ -128,6 +171,8 @@ jobs:
           {
             echo "## CI Report Summary"
             echo
+            echo "- Marker selection: \`${{ github.event.inputs.marker_selection || 'all_markers' }}\`"
+            echo "- Custom marker: \`${{ github.event.inputs.custom_marker || 'n/a' }}\`"
             echo "- Evidence mode: \`${{ github.event.inputs.evidence_mode || vars.BROWSER_EVIDENCE_MODE || 'failure_only' }}\`"
             echo "- No Allure HTML report was generated in this workflow run."
           } >> "$GITHUB_STEP_SUMMARY"
@@ -159,6 +204,8 @@ jobs:
           {
             echo "## CI Report Summary"
             echo
+            echo "- Marker selection: \`${{ github.event.inputs.marker_selection || 'all_markers' }}\`"
+            echo "- Custom marker: \`${{ github.event.inputs.custom_marker || 'n/a' }}\`"
             echo "- Evidence mode: \`${{ github.event.inputs.evidence_mode || vars.BROWSER_EVIDENCE_MODE || 'failure_only' }}\`"
             echo "- Click [here](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/) to open the Allure report."
             echo "- Workflow artifact backup: [allure-html-report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts)"
@@ -174,6 +221,8 @@ jobs:
           {
             echo "## CI Report Summary"
             echo
+            echo "- Marker selection: \`${{ github.event.inputs.marker_selection || 'all_markers' }}\`"
+            echo "- Custom marker: \`${{ github.event.inputs.custom_marker || 'n/a' }}\`"
             echo "- Evidence mode: \`${{ github.event.inputs.evidence_mode || vars.BROWSER_EVIDENCE_MODE || 'failure_only' }}\`"
             echo "- Click [here](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts) to open the workflow artifacts page."
             echo "- GitHub Pages deployment is skipped for pull request and non-main push runs."
