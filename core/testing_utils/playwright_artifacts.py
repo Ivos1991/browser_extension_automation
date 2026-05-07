@@ -13,7 +13,7 @@ def attachment_type_for_path(path: Path):
     if suffix == ".webm":
         return allure.attachment_type.WEBM
     if suffix == ".zip":
-        return allure.attachment_type.ZIP
+        return "application/zip"
     return allure.attachment_type.TEXT
 
 
