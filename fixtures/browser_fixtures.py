@@ -1,4 +1,6 @@
+import json
 from pathlib import Path
+from time import sleep
 from typing import Any
 
 import pytest
@@ -15,7 +17,6 @@ from core.testing_utils.evidence import (
     should_record_video,
 )
 from core.testing_utils.playwright_artifacts import capture_page_screenshot
-from pages.extension_popup_page import ExtensionPopupPage
 
 
 @pytest.fixture(scope="session")
@@ -53,7 +54,6 @@ def browser_context(request: pytest.FixtureRequest, settings: Settings, playwrig
 def page(request: pytest.FixtureRequest, browser_context: BrowserContext, settings: Settings) -> Page:
     collect_all = bool(request.node.get_closest_marker("collect_all_evidence"))
     enable_trace = should_capture_trace(settings.browser_evidence_mode, collect_all)
-    resolved_extension_id = request.getfixturevalue("extension_id")
     if enable_trace:
         browser_context.tracing.start(screenshots=True, snapshots=True, sources=True)
     page = browser_context.new_page()
@@ -79,6 +79,7 @@ def page(request: pytest.FixtureRequest, browser_context: BrowserContext, settin
 
     page_url: str | None = None
     evidence_paths: list[Path] = []
+    evidence_notes: list[str] = []
 
     if should_attach:
         screenshot_path = settings.screenshots_dir / f"{request.node.name}.png"
@@ -92,14 +93,15 @@ def page(request: pytest.FixtureRequest, browser_context: BrowserContext, settin
         collect_all,
         test_failed,
     ):
-        log_path = _download_extension_logs(
+        log_path, log_error = _download_extension_logs(
             browser_context=browser_context,
             settings=settings,
-            extension_id=resolved_extension_id,
             artifact_name=request.node.name,
         )
         if log_path is not None and log_path.exists():
             evidence_paths.append(log_path)
+        if log_error:
+            evidence_notes.append(f"Extension log capture failed: {log_error}")
 
     video = page.video
     page.close()
@@ -112,6 +114,7 @@ def page(request: pytest.FixtureRequest, browser_context: BrowserContext, settin
 
     setattr(request.node, "_allure_evidence_paths", evidence_paths)
     setattr(request.node, "_allure_evidence_page_url", page_url)
+    setattr(request.node, "_allure_evidence_notes", evidence_notes)
 
 
 @pytest.fixture(scope="session")
@@ -151,18 +154,33 @@ def _resolve_video_path(video: Any) -> Path | None:
 def _download_extension_logs(
     browser_context: BrowserContext,
     settings: Settings,
-    extension_id: str,
     artifact_name: str,
-) -> Path | None:
-    log_page = browser_context.new_page()
-    log_page.set_default_timeout(settings.expect_timeout_ms)
-    log_page.set_default_navigation_timeout(settings.page_load_timeout_ms)
+) -> tuple[Path | None, str | None]:
     try:
-        popup_page = ExtensionPopupPage(log_page, settings)
-        popup_page.open(extension_id)
-        return popup_page.download_logs(settings.extension_logs_dir, artifact_name)
+        service_worker = browser_context.service_workers[0] if browser_context.service_workers else browser_context.wait_for_event("serviceworker")
+        service_worker.evaluate(
+            """() => {
+                if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
+                    throw new Error("chrome.runtime.sendMessage is unavailable in the extension worker");
+                }
+                const flowTraceId = typeof crypto !== "undefined" && crypto.randomUUID
+                    ? crypto.randomUUID()
+                    : `${Date.now()}`;
+                chrome.runtime.sendMessage({ type: "saveLogs", ctx: { flowTraceId } });
+            }"""
+        )
+        sleep(1)
+        logs = service_worker.evaluate(
+            """async () => {
+                const browserApi = typeof browser === "undefined" ? chrome : browser;
+                const result = await browserApi.storage.local.get(["debugLogs"]);
+                return result.debugLogs || [];
+            }"""
+        )
+        settings.extension_logs_dir.mkdir(parents=True, exist_ok=True)
+        target_path = settings.extension_logs_dir / f"{artifact_name}-prompt_security_extension_debug_logs.txt"
+        serialized_logs = "\n".join(logs) if logs else json.dumps([], indent=2)
+        target_path.write_text(serialized_logs, encoding="utf-8")
+        return target_path, None
     except Exception as error:
-        attach_text("extension-log-capture", f"Extension log capture failed: {error}")
-        return None
-    finally:
-        log_page.close()
+        return None, str(error)
