@@ -54,6 +54,11 @@ At runtime, the framework opens the extension popup, applies `EXTENSION_API_DOMA
 
 Legacy values `always`, `on_failure`, and `off` are normalized for compatibility.
 
+Allure attachment behavior:
+
+- In `full` mode, passing tests also attach screenshot, trace, and video evidence.
+- Because these artifacts are produced during fixture teardown, they appear in the Allure report under the `page` fixture `afters` section rather than only as top-level test attachments.
+
 ## Setup
 
 ```powershell
