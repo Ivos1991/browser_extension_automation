@@ -36,10 +36,13 @@ def attach_test_evidence(paths: list[Path], page_url: str | None, test_failed: b
 
 def _attachment_name_for_path(path: Path, test_failed: bool) -> str:
     suffix = path.suffix.lower()
+    name = path.name.lower()
     if suffix == ".png":
         return "failure-screenshot" if test_failed else "page-screenshot"
     if suffix == ".zip":
         return "playwright-trace"
     if suffix == ".webm":
         return "playwright-video"
+    if "log" in name:
+        return "extension-logs"
     return path.name

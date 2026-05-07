@@ -18,9 +18,9 @@ class PlaywrightActions:
         self.logger.info("Fill %s", description)
         locator.fill(value)
 
-    def click(self, locator: Locator, description: str) -> None:
+    def click(self, locator: Locator, description: str, no_wait_after: bool = False) -> None:
         self.logger.info("Click %s", description)
-        locator.click()
+        locator.click(no_wait_after=no_wait_after)
 
     def expect_visible(self, locator: Locator, description: str, timeout: int) -> None:
         self.logger.info("Expect visible: %s", description)

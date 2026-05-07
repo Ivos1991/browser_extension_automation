@@ -4,7 +4,7 @@ from typing import Callable
 
 import allure
 import pytest
-from playwright.sync_api import BrowserContext, Page
+from playwright.sync_api import BrowserContext, Error, Page
 
 from config.settings import Settings
 from constants.extension import EXTENSION_CONFIGURATION_MESSAGE
@@ -29,7 +29,7 @@ def configured_extension(browser_context: BrowserContext, extension_id: str, set
     _wait_for_policy_enforcement(browser_context, settings)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def configure_extension_api(
     browser_context: BrowserContext, extension_id: str, settings: Settings
 ) -> Callable[[str, str, str, str | None], None]:
@@ -58,7 +58,7 @@ def configure_extension_api(
 
 @pytest.fixture
 def invalid_extension_api_key_configuration(
-    configure_extension_api: Callable[[str, str, str, str | None], None], settings: Settings
+    configure_extension_api: Callable[[str, str, str, str | None], None], settings: Settings, browser_context: BrowserContext
 ):
     configure_extension_api(
         settings.extension_api_domain,
@@ -72,11 +72,12 @@ def invalid_extension_api_key_configuration(
         settings.extension_api_key,
         EXTENSION_CONFIGURATION_MESSAGE,
     )
+    _wait_for_policy_enforcement(browser_context, settings)
 
 
 @pytest.fixture
 def invalid_extension_api_domain_configuration(
-    configure_extension_api: Callable[[str, str, str, str | None], None], settings: Settings
+    configure_extension_api: Callable[[str, str, str, str | None], None], settings: Settings, browser_context: BrowserContext
 ):
     configure_extension_api(
         INVALID_EXTENSION_API_DOMAIN,
@@ -90,11 +91,12 @@ def invalid_extension_api_domain_configuration(
         settings.extension_api_key,
         EXTENSION_CONFIGURATION_MESSAGE,
     )
+    _wait_for_policy_enforcement(browser_context, settings)
 
 
 @pytest.fixture
 def missing_extension_configuration(
-    configure_extension_api: Callable[[str, str, str, str | None], None], settings: Settings
+    configure_extension_api: Callable[[str, str, str, str | None], None], settings: Settings, browser_context: BrowserContext
 ):
     configure_extension_api("", "", EXTENSION_CONFIGURATION_MESSAGE, EXTENSION_CONNECTION_FAILURE_MESSAGE)
     yield "missing-extension-configuration"
@@ -103,6 +105,7 @@ def missing_extension_configuration(
         settings.extension_api_key,
         EXTENSION_CONFIGURATION_MESSAGE,
     )
+    _wait_for_policy_enforcement(browser_context, settings)
 
 
 @pytest.fixture
@@ -135,18 +138,24 @@ def _wait_for_policy_enforcement(browser_context: BrowserContext, settings: Sett
     probe_page.set_default_navigation_timeout(settings.page_load_timeout_ms)
     deadline = monotonic() + (settings.policy_sync_timeout_ms / 1000)
     last_url = ""
+    last_error = ""
 
     try:
         with allure.step("Wait for extension policy enforcement to become active"):
             while monotonic() < deadline:
-                probe_page.goto(settings.blocked_url, wait_until="domcontentloaded")
+                try:
+                    probe_page.goto(settings.blocked_url, wait_until="domcontentloaded")
+                    last_error = ""
+                except Error as error:
+                    last_error = str(error)
                 probe_page.wait_for_timeout(settings.policy_sync_poll_interval_ms)
                 last_url = probe_page.url
                 if last_url.startswith("chrome-extension://") and "pageOverlay.html" in last_url:
                     return
             pytest.fail(
                 "Extension policy enforcement did not become active within "
-                f"{settings.policy_sync_timeout_ms}ms. Last observed URL: {last_url or settings.blocked_url}"
+                f"{settings.policy_sync_timeout_ms}ms. Last observed URL: {last_url or settings.blocked_url}. "
+                f"Last navigation error: {last_error or 'n/a'}"
             )
     finally:
         probe_page.close()

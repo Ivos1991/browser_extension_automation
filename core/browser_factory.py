@@ -34,7 +34,7 @@ class BrowserFactory:
                 f"--load-extension={extension_path}",
             ],
             viewport={"width": 1600, "height": 1000},
-            accept_downloads=False,
+            accept_downloads=True,
             ignore_https_errors=True,
             record_video_dir=(
                 str(self.settings.videos_dir)

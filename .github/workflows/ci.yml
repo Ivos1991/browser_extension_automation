@@ -30,6 +30,28 @@ on:
           - failure_only
           - full
           - screenshot_only
+      parallel_run:
+        description: "Enable pytest-xdist parallel execution"
+        required: true
+        default: "off"
+        type: choice
+        options:
+          - off
+          - on
+      worker_count:
+        description: "Number of pytest-xdist workers when parallel_run=on"
+        required: true
+        default: "2"
+        type: choice
+        options:
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+          - "5"
+          - "6"
+          - "7"
+          - "8"
 
 permissions:
   contents: write
@@ -45,6 +67,8 @@ jobs:
       BROWSER_EVIDENCE_MODE: ${{ inputs.evidence_mode || vars.BROWSER_EVIDENCE_MODE || 'failure_only' }}
       MARKER_SELECTION: ${{ inputs.marker_selection || 'all_markers' }}
       CUSTOM_MARKER: ${{ inputs.custom_marker || '' }}
+      PARALLEL_RUN: ${{ inputs.parallel_run || 'off' }}
+      WORKER_COUNT: ${{ inputs.worker_count || '2' }}
       ARTIFACT_DIR: artifacts
       TARGET_ENV: ci
       EXTENSION_PATH: extensions/prompt-security
@@ -94,6 +118,7 @@ jobs:
         shell: bash
         run: |
           marker_expression="ui"
+          xdist_args=""
           case "${MARKER_SELECTION}" in
             positive)
               marker_expression="ui and positive"
@@ -115,8 +140,13 @@ jobs:
               marker_expression="ui"
               ;;
           esac
+          if [ "${PARALLEL_RUN}" = "on" ]; then
+            xdist_args="-n ${WORKER_COUNT}"
+          fi
           echo "Running pytest marker expression: ${marker_expression}"
-          python -m pytest tests/ui -m "${marker_expression}" -q -rs --alluredir artifacts/allure-results
+          echo "Parallel mode: ${PARALLEL_RUN}"
+          echo "Worker count: ${WORKER_COUNT}"
+          python -m pytest tests/ui -m "${marker_expression}" ${xdist_args} -q -rs --basetemp artifacts/pytest-tmp --alluredir artifacts/allure-results
 
       - name: Detect Allure results
         if: always()
@@ -174,6 +204,8 @@ jobs:
             echo "- Marker selection: \`${{ github.event.inputs.marker_selection || 'all_markers' }}\`"
             echo "- Custom marker: \`${{ github.event.inputs.custom_marker || 'n/a' }}\`"
             echo "- Evidence mode: \`${{ github.event.inputs.evidence_mode || vars.BROWSER_EVIDENCE_MODE || 'failure_only' }}\`"
+            echo "- Parallel run: \`${{ github.event.inputs.parallel_run || 'off' }}\`"
+            echo "- Worker count: \`${{ github.event.inputs.worker_count || '2' }}\`"
             echo "- No Allure HTML report was generated in this workflow run."
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -207,6 +239,8 @@ jobs:
             echo "- Marker selection: \`${{ github.event.inputs.marker_selection || 'all_markers' }}\`"
             echo "- Custom marker: \`${{ github.event.inputs.custom_marker || 'n/a' }}\`"
             echo "- Evidence mode: \`${{ github.event.inputs.evidence_mode || vars.BROWSER_EVIDENCE_MODE || 'failure_only' }}\`"
+            echo "- Parallel run: \`${{ github.event.inputs.parallel_run || 'off' }}\`"
+            echo "- Worker count: \`${{ github.event.inputs.worker_count || '2' }}\`"
             echo "- Click [here](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/) to open the Allure report."
             echo "- Workflow artifact backup: [allure-html-report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts)"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -224,6 +258,8 @@ jobs:
             echo "- Marker selection: \`${{ github.event.inputs.marker_selection || 'all_markers' }}\`"
             echo "- Custom marker: \`${{ github.event.inputs.custom_marker || 'n/a' }}\`"
             echo "- Evidence mode: \`${{ github.event.inputs.evidence_mode || vars.BROWSER_EVIDENCE_MODE || 'failure_only' }}\`"
+            echo "- Parallel run: \`${{ github.event.inputs.parallel_run || 'off' }}\`"
+            echo "- Worker count: \`${{ github.event.inputs.worker_count || '2' }}\`"
             echo "- Click [here](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts) to open the workflow artifacts page."
             echo "- GitHub Pages deployment is skipped for pull request and non-main push runs."
           } >> "$GITHUB_STEP_SUMMARY"

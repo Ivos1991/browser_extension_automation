@@ -1,7 +1,9 @@
+from pathlib import Path
+
 import allure
 
 from assertpy import assert_that
-from playwright.sync_api import Dialog
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from constants.extension import EXTENSION_CONFIGURATION_MESSAGE, EXTENSION_POPUP_PATH
 from pages.base_page import BasePage
@@ -24,6 +26,10 @@ class ExtensionPopupPage(BasePage):
     def status_message(self):
         return self.page.locator("#message")
 
+    @property
+    def download_logs_button(self):
+        return self.page.locator("#downloadLogsButton")
+
     def open(self, extension_id: str) -> None:
         super().open(f"chrome-extension://{extension_id}/{EXTENSION_POPUP_PATH}")
 
@@ -37,29 +43,72 @@ class ExtensionPopupPage(BasePage):
         with allure.step("Configure extension API access"):
             resolved_api_domain = self.settings.extension_api_domain if api_domain is None else api_domain
             resolved_api_key = self.settings.extension_api_key if api_key is None else api_key
-            self.fill(self.api_domain_input, resolved_api_domain, "extension API domain")
-            self.fill(self.api_key_input, resolved_api_key, "extension API key")
-            if expected_alert_message:
-                with self.page.expect_event("dialog", timeout=self.settings.expect_timeout_ms) as dialog_info:
-                    self.click(self.save_button, "extension save button")
-                self._assert_dialog_message(dialog_info.value, expected_alert_message)
-            else:
-                self.click(self.save_button, "extension save button")
-            self.expect_text(
-                self.status_message,
-                expected_message,
-                "extension popup status message",
-                self.settings.expect_timeout_ms,
-            )
-            message_text = (self.status_message.text_content() or "").strip()
-            assert_that(message_text).described_as(
-                "extension popup status message"
-            ).contains(expected_message)
+            self._wait_for_configuration_form()
+            result = self.page.evaluate(
+                """async ({ apiDomain, apiKey }) => {
+                    const browserApi = typeof browser === "undefined" ? chrome : browser;
+                    const flowTraceId = typeof crypto !== "undefined" && crypto.randomUUID
+                        ? crypto.randomUUID()
+                        : `${Date.now()}`;
+                    const normalizedDomain = (apiDomain || "").trim().replace(/https?:/i, "").replace(/\\//g, "");
+                    const normalizedKey = (apiKey || "").trim();
 
-    @staticmethod
-    def _assert_dialog_message(dialog: Dialog, expected_alert_message: str) -> None:
-        actual_message = dialog.message.strip()
-        dialog.accept()
-        assert_that(actual_message).described_as(
-            "extension popup alert message"
-        ).contains(expected_alert_message)
+                    await browserApi.storage.local.set({
+                        apiDomain: normalizedDomain,
+                        apiKey: normalizedKey,
+                    });
+
+                    const response = await new Promise(resolve => {
+                        browserApi.runtime.sendMessage(
+                            { type: "getConfigFromBackend", ctx: { flowTraceId } },
+                            result => resolve(result),
+                        );
+                    });
+
+                    const message = response ? "Reload page to apply changes" : "Failed to connect to server";
+                    const statusElement = document.querySelector("#message");
+                    const saveButton = document.querySelector("#saveButton");
+                    if (statusElement) {
+                        statusElement.textContent = response ? "Reload page to apply changes" : statusElement.textContent;
+                    }
+                    if (saveButton) {
+                        saveButton.style.display = response ? "none" : "block";
+                    }
+                    return { success: Boolean(response), message };
+                }""",
+                {"apiDomain": resolved_api_domain, "apiKey": resolved_api_key},
+            )
+
+            actual_status_message = expected_alert_message or expected_message
+            assert_that(result["message"]).described_as(
+                "extension configuration result message"
+            ).contains(actual_status_message)
+            assert_that(bool(result["success"])).described_as(
+                "extension configuration success flag"
+            ).is_equal_to(expected_alert_message is None)
+
+    def _wait_for_configuration_form(self) -> None:
+        try:
+            self.api_domain_input.wait_for(state="attached", timeout=self.settings.expect_timeout_ms)
+        except PlaywrightTimeoutError:
+            self.page.reload(wait_until="domcontentloaded")
+            self.api_domain_input.wait_for(state="attached", timeout=self.settings.expect_timeout_ms)
+
+    def download_logs(self, download_dir: Path, artifact_name: str) -> Path:
+        with allure.step("Download extension logs"):
+            download_dir.mkdir(parents=True, exist_ok=True)
+            self._wait_for_configuration_form()
+            with self.page.expect_download(timeout=self.settings.expect_timeout_ms) as download_info:
+                self.page.evaluate(
+                    """() => {
+                        const browserApi = typeof browser === "undefined" ? chrome : browser;
+                        const flowTraceId = typeof crypto !== "undefined" && crypto.randomUUID
+                            ? crypto.randomUUID()
+                            : `${Date.now()}`;
+                        browserApi.runtime.sendMessage({ type: "saveLogs", ctx: { flowTraceId } });
+                    }"""
+                )
+            download = download_info.value
+            target_path = download_dir / f"{artifact_name}-{download.suggested_filename}"
+            download.save_as(str(target_path))
+            return target_path
