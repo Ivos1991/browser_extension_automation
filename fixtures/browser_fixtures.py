@@ -10,10 +10,12 @@ from core.exceptions import ExtensionConfigurationError
 from core.reporting import attach_text
 from core.testing_utils.evidence import (
     should_attach_test_evidence,
+    should_capture_extension_logs,
     should_capture_trace,
     should_record_video,
 )
 from core.testing_utils.playwright_artifacts import capture_page_screenshot
+from pages.extension_popup_page import ExtensionPopupPage
 
 
 @pytest.fixture(scope="session")
@@ -25,9 +27,7 @@ def playwright_instance() -> Playwright:
 @pytest.fixture(scope="session")
 def browser_context(request: pytest.FixtureRequest, settings: Settings, playwright_instance, logger) -> BrowserContext:
     settings.playwright_output_dir.mkdir(parents=True, exist_ok=True)
-    collect_all_evidence_requested = bool(
-        getattr(request.config, "_collect_all_evidence_requested", False)
-    )
+    collect_all_evidence_requested = bool(request.node.get_closest_marker("collect_all_evidence"))
     if should_record_video(settings.browser_evidence_mode, collect_all_evidence_requested):
         settings.videos_dir.mkdir(parents=True, exist_ok=True)
     if should_capture_trace(settings.browser_evidence_mode, collect_all_evidence_requested):
@@ -53,6 +53,7 @@ def browser_context(request: pytest.FixtureRequest, settings: Settings, playwrig
 def page(request: pytest.FixtureRequest, browser_context: BrowserContext, settings: Settings) -> Page:
     collect_all = bool(request.node.get_closest_marker("collect_all_evidence"))
     enable_trace = should_capture_trace(settings.browser_evidence_mode, collect_all)
+    resolved_extension_id = request.getfixturevalue("extension_id")
     if enable_trace:
         browser_context.tracing.start(screenshots=True, snapshots=True, sources=True)
     page = browser_context.new_page()
@@ -85,6 +86,20 @@ def page(request: pytest.FixtureRequest, browser_context: BrowserContext, settin
         page_url = page.url
         if screenshot_path.exists():
             evidence_paths.append(screenshot_path)
+
+    if settings.extension_logs_enabled and should_capture_extension_logs(
+        settings.browser_evidence_mode,
+        collect_all,
+        test_failed,
+    ):
+        log_path = _download_extension_logs(
+            browser_context=browser_context,
+            settings=settings,
+            extension_id=resolved_extension_id,
+            artifact_name=request.node.name,
+        )
+        if log_path is not None and log_path.exists():
+            evidence_paths.append(log_path)
 
     video = page.video
     page.close()
@@ -131,3 +146,23 @@ def _resolve_video_path(video: Any) -> Path | None:
     except Exception:
         return None
     return Path(video_path)
+
+
+def _download_extension_logs(
+    browser_context: BrowserContext,
+    settings: Settings,
+    extension_id: str,
+    artifact_name: str,
+) -> Path | None:
+    log_page = browser_context.new_page()
+    log_page.set_default_timeout(settings.expect_timeout_ms)
+    log_page.set_default_navigation_timeout(settings.page_load_timeout_ms)
+    try:
+        popup_page = ExtensionPopupPage(log_page, settings)
+        popup_page.open(extension_id)
+        return popup_page.download_logs(settings.extension_logs_dir, artifact_name)
+    except Exception as error:
+        attach_text("extension-log-capture", f"Extension log capture failed: {error}")
+        return None
+    finally:
+        log_page.close()

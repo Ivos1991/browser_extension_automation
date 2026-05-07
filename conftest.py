@@ -32,6 +32,7 @@ def write_environment_metadata(settings: Settings) -> None:
             "extension_path": str(settings.extension_path or ""),
             "extension_api_domain": settings.extension_api_domain,
             "browser_evidence_mode": settings.browser_evidence_mode,
+            "extension_logs_enabled": str(settings.extension_logs_enabled).lower(),
         },
     )
 

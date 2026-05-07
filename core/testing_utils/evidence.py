@@ -19,6 +19,12 @@ def should_record_video(evidence_mode: str, collect_all_evidence: bool) -> bool:
     }
 
 
+def should_capture_extension_logs(evidence_mode: str, collect_all_evidence: bool, test_failed: bool) -> bool:
+    if collect_all_evidence or evidence_mode == EVIDENCE_MODE_FULL:
+        return True
+    return evidence_mode == EVIDENCE_MODE_FAILURE_ONLY and test_failed
+
+
 def should_attach_test_evidence(evidence_mode: str, collect_all_evidence: bool, test_failed: bool) -> bool:
     if collect_all_evidence or evidence_mode == EVIDENCE_MODE_FULL:
         return True
